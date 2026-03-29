@@ -9,10 +9,11 @@ model = ChatTongyi(model = "qwen3-max")
 #    "你需要根据会话历史回应用户问题，对话历史:{chat_history},用户提问
 #    :{input},请回答"
 #)
-ChatPromptTemplate.from_messages(
+prompt= ChatPromptTemplate.from_messages(
     [
-        ("system","你需要根据会话历史回应用户问题，对话历史:")
-        MessagesPlaceholder
+        ("system","你需要根据会话历史回应用户问题，对话历史:"),
+        MessagesPlaceholder("chat_history"),
+        ("human","请回答如下问题：{input}")
     ]
 )
 str_parser = StrOutputParser()
