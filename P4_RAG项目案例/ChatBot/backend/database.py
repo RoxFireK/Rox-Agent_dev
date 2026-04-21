@@ -225,4 +225,73 @@ def _apply_schema_compatibility_migrations(
 
 async def init_db() -> None:
     #初始化数据库
-    from backend.models import AgentTeam,CronJob,Message,Personality,Session,Setting,Task,ToolConversation
+    #导入所有模型以确保表被创建
+    from backend.models import agentTeam,cronJob,message,personality,session,setting,task,toolConversation
+    #创建异步数据库事务上下文，自动管理事务提交和回滚
+    async with engine.begin() as conn:
+        #创建所有数据库表
+        await conn.run_sync(Base.metadata.create_all)
+        #调用迁移函数
+        await conn.run_sync(_apply_schema_compatibility_migrations)
+    #初始化人格配置
+    await init_personalities()
+
+async def init_personalities() -> None:
+    #初始化内置性格数据
+    from backend.models.personality import Personality
+    from sqlalchemy import select
+
+    #创建异步对话上下文，自动管理会话的生命周期
+    async with AsyncSessionLocal() as session:
+        #进行异常处理
+        try:
+            #执行查询，获取personality表中的记录
+            result = await session.execute(select(Personality))
+            #从查询中获取第一条记录
+            existing = result.scalars().first()
+            if existing:
+                #已有数据则跳过初始化
+                return
+
+            #从personalities.py导入内置数据
+            from backend.modules.agent.personalities import PERSONALITY_PRESETS
+            # 为不同人格设置对应图标,以字典格式
+            icon_map = {
+                "grumpy": "CloudLightning",
+                "roast": "Frown",
+                "gentle": "Heart",
+                "blunt": "Target",
+                "toxic": "Snowflake",
+                "chatty": "MessageSquare",
+                "philosopher": "BookOpen",
+                "cute": "Smile",
+                "humorous": "Laugh",
+                "hyper": "TrendingUp",
+                "chuuni": "Gamepad2",
+                "zen": "Clock",
+            }
+
+            #插入内置性格
+            for pid,data in PERSONALITY_PRESETS.items():
+                #参数来源于models.personality的personality类
+                personality = Personality(
+                    id = pid,
+                    name = data["name"],
+                    description = data["description"],
+                    traits = data["traits"],
+                    speaking_style = data["speaking_style"],
+                    icon = icon_map.get(pid,"Smile"),
+                    is_builtin = True,
+                    is_active = True,
+                )
+                session.add(personality)
+
+            #将当前事务中的所有更改永远保存到数据库中
+            await session.commit()
+
+        #捕获任何类型的异常
+        except Exception:
+            #发现异常时回滚
+            await session.rollback()
+            #发现错误静默处理
+            pass
