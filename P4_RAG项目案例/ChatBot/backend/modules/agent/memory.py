@@ -1,0 +1,2 @@
+class MemoryStore:
+    pass
